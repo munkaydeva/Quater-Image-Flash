@@ -7,75 +7,76 @@ from fastapi import FastAPI
 import uvicorn
 
 # ==========================================
-# ⚙️ কনফিগারেশন (আপনার তথ্য)
+# ⚙️ কনফিগারেশন
 # ==========================================
 POE_ACCESS_KEY = "2ioixw7wQlgGkk5vNFdf5I0zaoN8QeQv"
 BOT_NAME = "Quater"
 
-# আপনার Hugging Face স্পেসের Ngrok API লিঙ্ক
+# আপনার Hugging Face স্পেসের Ngrok লিঙ্ক
 NGROK_API_URL = "https://earache-huntsman-undertow.ngrok-free.dev/generate"
 
 # ==========================================
-# 🤖 POE BOT CLASS (The Bridge)
+# 🤖 POE BOT CLASS (Fixed with Auth)
 # ==========================================
 class QuaterBridgeBot(fp.PoeBot):
     
-    # ১. Poe-র হ্যান্ডশেক/পিং পাস করার জন্য
+    # 🎯 বট ক্লাসে Access Key পাস করা হলো যাতে অ্যাটাচমেন্ট পারমিশন পায়
+    def __init__(self, access_key: str):
+        super().__init__(access_key=access_key)
+
     async def get_settings(self, setting: fp.SettingsRequest) -> fp.SettingsResponse:
         return fp.SettingsResponse(allow_attachments=True)
 
-    # ২. ইউজারের মেসেজ রিসিভ ও প্রসেস করা
     async def get_response(self, request: fp.QueryRequest) -> AsyncIterable[fp.PartialResponse]:
-        
-        # ইউজার কী ছবি বানাতে চায় তা বের করা
         user_prompt = request.query[-1].content
         yield fp.PartialResponse(text="🎨 ছবি তৈরি হচ্ছে, অনুগ্রহ করে ১২-১৫ সেকেন্ড অপেক্ষা করুন...\n\n")
 
         try:
-            # Render থেকে আপনার Ngrok (HF Space)-এ রিকুয়েস্ট পাঠানো
-            # timeout=60 দেওয়া হয়েছে কারণ ছবি বানাতে ১৫ সেকেন্ড লাগে
+            # Ngrok-এ কল পাঠানো
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
                     NGROK_API_URL,
                     json={"prompt": user_prompt},
                     headers={
                         "Content-Type": "application/json",
-                        "ngrok-skip-browser-warning": "true"  # 🎯 Ngrok-এর ওয়ার্নিং পেজ বাইপাস করার ম্যাজিক!
+                        "ngrok-skip-browser-warning": "true"
                     }
                 )
                 
                 data = response.json()
 
-                # যদি HF Space থেকে সাকসেস মেসেজ আসে
                 if data.get("status") == "success":
-                    # Base64 ডাটা থেকে "data:image/png;base64," অংশটুকু বাদ দিয়ে আসল কোড নেওয়া
-                    base64_string = data["image_base64"].split(",")[1]
+                    base64_data = data["image_base64"]
+                    # Base64 থেকে ডাটা আলাদা করা
+                    base64_string = base64_data.split(",")[1] if "," in base64_data else base64_data
                     image_bytes = base64.b64decode(base64_string)
 
-                    # Poe-তে ছবি আপলোড করে দেওয়া
+                    # ১. Poe API তে সরাসরি ছবি অ্যাটাচ করা
                     await self.post_message_attachment(
                         message_id=request.message_id,
                         file_data=image_bytes,
                         filename="quater_image.png",
                         is_inline=True
                     )
-                    yield fp.PartialResponse(text="✨ আপনার ছবি প্রস্তুত!")
+                    
+                    # ২. চ্যাটে ছবি নিশ্চিত করা
+                    yield fp.PartialResponse(text="✨ আপনার ছবি নিচে তৈরি হয়ে গেছে!\n")
                 else:
-                    error_msg = data.get("message", "Unknown error")
-                    yield fp.PartialResponse(text=f"❌ ছবি জেনারেট করতে সমস্যা হয়েছে: {error_msg}")
+                    error_msg = data.get("message", "Generation failed")
+                    yield fp.PartialResponse(text=f"❌ ছবি তৈরিতে সমস্যা হয়েছে: {error_msg}")
 
         except httpx.ReadTimeout:
-            yield fp.PartialResponse(text="❌ সার্ভার টাইমআউট! Hugging Face Space হয়তো স্লিপ মোডে আছে বা লোড বেশি।")
+            yield fp.PartialResponse(text="❌ টাইমআউট! Hugging Face Space হয়তো ব্যস্ত বা স্লিপ মোডে আছে।")
         except Exception as e:
             yield fp.PartialResponse(text=f"❌ কানেকশন এরর: {str(e)}")
 
 # ==========================================
-# 🌐 FASTAPI APP SETUP
+# 🌐 FASTAPI APP
 # ==========================================
-# Poe-র জন্য অ্যাপ তৈরি
-app = fp.make_app(QuaterBridgeBot(), access_key=POE_ACCESS_KEY, bot_name=BOT_NAME)
+# Bot ইনিশিয়ালাইজেশনে Access Key যুক্ত করা হলো
+bot = QuaterBridgeBot(access_key=POE_ACCESS_KEY)
+app = fp.make_app(bot, access_key=POE_ACCESS_KEY, bot_name=BOT_NAME)
 
-# Render-এর জন্য লোকাল টেস্টিং ব্লক
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
