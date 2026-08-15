@@ -28,7 +28,7 @@ class QuaterBridgeBot(fp.PoeBot):
 
     async def get_response(self, request: fp.QueryRequest) -> AsyncIterable[fp.PartialResponse]:
         user_prompt = request.query[-1].content
-        yield fp.PartialResponse(text="🖌️ Creating... Hold for 12 seconds 👇...\n\n")
+        yield fp.PartialResponse(text="🖌️ Quater-Image-Turbo is creating the image…  Wait 12 seconds and look down... 👇\n\n")
 
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
@@ -62,7 +62,7 @@ class QuaterBridgeBot(fp.PoeBot):
                     # ৩. Poe-তে সরাসরি মার্কডাউন ছবি পাঠানো
                     poe_image_url = f"{RENDER_BASE_URL}/images/{filename}"
                     markdown_image = f"![Generated Image]({poe_image_url})\n\n"
-                    yield fp.PartialResponse(text=f"{markdown_image}🎉 Here Your Image 👆.\n\n*Powered by Quater AI 🎖️.*")
+                    yield fp.PartialResponse(text=f"{markdown_image}🎉 Created successfully! Here Your Image 👆.\n\n*Powered by Quater AI 🎖️.*")
 
                     try:
                         await self.post_message_attachment(
