@@ -1,4 +1,4 @@
-imageos
+import os
 import uuid
 import httpx
 from typing import AsyncIterable
@@ -28,7 +28,7 @@ class QuaterBridgeBot(fp.PoeBot):
 
     async def get_response(self, request: fp.QueryRequest) -> AsyncIterable[fp.PartialResponse]:
         user_prompt = request.query[-1].content
-        yield fp.PartialResponse(text="🖌 Creating…  Wait 12 seconds and look down... 👇\n\n")
+        yield fp.PartialResponse(text="🖌️ Creating the image…  Wait 12 seconds and look down... 👇\n\n")
 
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
