@@ -3,36 +3,29 @@ import base64
 import httpx
 from typing import AsyncIterable
 import fastapi_poe as fp
-from fastapi import FastAPI
 import uvicorn
 
 # ==========================================
-# ⚙️ কনফিগারেশন
+# ⚙️ Configuration
 # ==========================================
 POE_ACCESS_KEY = "2ioixw7wQlgGkk5vNFdf5I0zaoN8QeQv"
-BOT_NAME = "Quater"
-
-# আপনার Hugging Face স্পেসের Ngrok লিঙ্ক
 NGROK_API_URL = "https://earache-huntsman-undertow.ngrok-free.dev/generate"
 
 # ==========================================
-# 🤖 POE BOT CLASS (Fixed with Auth)
+# 🤖 Poe Bot Class
 # ==========================================
 class QuaterBridgeBot(fp.PoeBot):
     
-    # 🎯 বট ক্লাসে Access Key পাস করা হলো যাতে অ্যাটাচমেন্ট পারমিশন পায়
-    def __init__(self, access_key: str):
-        super().__init__(access_key=access_key)
-
     async def get_settings(self, setting: fp.SettingsRequest) -> fp.SettingsResponse:
         return fp.SettingsResponse(allow_attachments=True)
 
     async def get_response(self, request: fp.QueryRequest) -> AsyncIterable[fp.PartialResponse]:
         user_prompt = request.query[-1].content
-        yield fp.PartialResponse(text="🎨 ছবি তৈরি হচ্ছে, অনুগ্রহ করে ১২-১৫ সেকেন্ড অপেক্ষা করুন...\n\n")
+        
+        # Premium & Sleek Generation Status
+        yield fp.PartialResponse(text="🎨 Rendering image... Please allow ~12 seconds.\n\n")
 
         try:
-            # Ngrok-এ কল পাঠানো
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
                     NGROK_API_URL,
@@ -47,11 +40,10 @@ class QuaterBridgeBot(fp.PoeBot):
 
                 if data.get("status") == "success":
                     base64_data = data["image_base64"]
-                    # Base64 থেকে ডাটা আলাদা করা
-                    base64_string = base64_data.split(",")[1] if "," in base64_data else base64_data
+                    base64_string = base64_data.split(",", 1)[1] if "," in base64_data else base64_data
                     image_bytes = base64.b64decode(base64_string)
 
-                    # ১. Poe API তে সরাসরি ছবি অ্যাটাচ করা
+                    # Attach image directly to Poe chat
                     await self.post_message_attachment(
                         message_id=request.message_id,
                         file_data=image_bytes,
@@ -59,23 +51,22 @@ class QuaterBridgeBot(fp.PoeBot):
                         is_inline=True
                     )
                     
-                    # ২. চ্যাটে ছবি নিশ্চিত করা
-                    yield fp.PartialResponse(text="✨ আপনার ছবি নিচে তৈরি হয়ে গেছে!\n")
+                    # Clean completion signature
+                    yield fp.PartialResponse(text="✨ Image generated successfully.\n\n*Powered by Quater AI 🔮*")
                 else:
                     error_msg = data.get("message", "Generation failed")
-                    yield fp.PartialResponse(text=f"❌ ছবি তৈরিতে সমস্যা হয়েছে: {error_msg}")
+                    yield fp.PartialResponse(text=f"⚠️ Generation failed: {error_msg}\n\nPlease try again.")
 
         except httpx.ReadTimeout:
-            yield fp.PartialResponse(text="❌ টাইমআউট! Hugging Face Space হয়তো ব্যস্ত বা স্লিপ মোডে আছে।")
+            yield fp.PartialResponse(text="⏳ Server timeout: The generation engine is taking longer than expected. Please try again.")
         except Exception as e:
-            yield fp.PartialResponse(text=f"❌ কানেকশন এরর: {str(e)}")
+            yield fp.PartialResponse(text=f"⚠️ Connection error: {str(e)}")
 
 # ==========================================
-# 🌐 FASTAPI APP
+# 🌐 FastAPI App (Clean Authentication)
 # ==========================================
-# Bot ইনিশিয়ালাইজেশনে Access Key যুক্ত করা হলো
-bot = QuaterBridgeBot(access_key=POE_ACCESS_KEY)
-app = fp.make_app(bot, access_key=POE_ACCESS_KEY, bot_name=BOT_NAME)
+bot = QuaterBridgeBot()
+app = fp.make_app(bot, access_key=POE_ACCESS_KEY)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
